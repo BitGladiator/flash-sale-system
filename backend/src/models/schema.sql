@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS sale_products (
 -- Inventory
 CREATE TABLE IF NOT EXISTS inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sale_product_id UUID NOT NULL REFERENCES sale_products(id),
+  sale_product_id UUID NOT NULL REFERENCES sale_products(id) UNIQUE,
   available_qty INTEGER NOT NULL,
   last_synced_at TIMESTAMPTZ DEFAULT NOW()
 );
