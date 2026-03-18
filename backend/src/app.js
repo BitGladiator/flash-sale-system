@@ -34,7 +34,7 @@ app.get('/health', async (req, res) => {
 });
 
 
-// app.use('/api/auth',     require('./routes/authRoutes'));
+app.use('/api/auth',     require('./routes/authRoutes'));
 // app.use('/api/products', require('./routes/productRoutes'));
 // app.use('/api/sales',    require('./routes/saleRoutes'));
 // app.use('/api/orders',   require('./routes/orderRoutes'));
