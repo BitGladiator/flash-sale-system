@@ -1,3 +1,4 @@
+// backend/src/app.js
 require('dotenv').config();
 const express = require('express');
 const { connect: connectRedis } = require('./config/redis');
@@ -6,6 +7,7 @@ const { initialize: initMinio } = require('./config/minio');
 const { pool } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const saleScheduler = require('./services/saleScheduler');
+const outboxPoller = require('./services/outboxPoller');  
 
 const app = express();
 
@@ -26,11 +28,10 @@ app.get('/health', async (req, res) => {
   }
 });
 
-
 app.use('/api/auth',     require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
-app.use('/api/sales',    require('./routes/saleRoutes'));  
-// app.use('/api/orders',   require('./routes/orderRoutes'));
+app.use('/api/sales',    require('./routes/saleRoutes'));
+app.use('/api/orders',   require('./routes/orderRoutes')); 
 
 app.use((req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
@@ -41,14 +42,14 @@ app.use(errorHandler);
 const start = async () => {
   try {
     await pool.query('SELECT 1');
-    console.log('✓ Postgres connected');
+    console.log('Postgres connected');
 
     await connectRedis();
     await connectRabbitMQ();
     await initMinio();
 
-    
     saleScheduler.start();
+    outboxPoller.start();   
 
     app.listen(process.env.PORT, () => {
       console.log(`Server running on http://localhost:${process.env.PORT}`);
