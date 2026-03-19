@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { query } = require('../config/db');
 const { uploadFile, getFileUrl, deleteFile } = require('../config/minio');
 const { authenticate } = require('../middleware/auth');
-
+const { userRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
 
@@ -105,7 +105,7 @@ router.get('/:id', async (req, res, next) => {
 
 // Protected — requires auth
 // Accepts multipart/form-data with optional image file
-router.post('/', authenticate, upload.single('image'), async (req, res, next) => {
+router.post('/', authenticate,userRateLimiter(20, 60000), upload.single('image'), async (req, res, next) => {
   try {
     const { name, description, base_price } = req.body;
 
@@ -156,7 +156,7 @@ router.post('/', authenticate, upload.single('image'), async (req, res, next) =>
 
 // Protected — requires auth
 // Updates product details and optionally replaces the image
-router.put('/:id', authenticate, upload.single('image'), async (req, res, next) => {
+router.put('/:id', authenticate,userRateLimiter(20, 60000), upload.single('image'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description, base_price, is_active } = req.body;
@@ -259,7 +259,7 @@ router.put('/:id', authenticate, upload.single('image'), async (req, res, next) 
 // Soft delete — sets is_active = false, does not remove the DB row
 // Hard delete would break order history that references this product
 
-router.delete('/:id', authenticate, async (req, res, next) => {
+router.delete('/:id', authenticate,userRateLimiter(20, 60000), async (req, res, next) => {
   try {
     const { id } = req.params;
 
