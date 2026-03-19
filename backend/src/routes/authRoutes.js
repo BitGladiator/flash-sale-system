@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/db');
 const { authenticate } = require('../middleware/auth');
-
+const { authRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
 
@@ -22,7 +22,7 @@ const generateToken = (user) => {
 
 
 
-router.post('/register', async (req, res, next) => {
+router.post('/register',authRateLimiter(), async (req, res, next) => {
   try {
     const { email, password, full_name } = req.body;
 
@@ -88,7 +88,7 @@ router.post('/register', async (req, res, next) => {
 
 
 
-router.post('/login', async (req, res, next) => {
+router.post('/login',authRateLimiter(), async (req, res, next) => {
   try {
     const { email, password } = req.body;
 

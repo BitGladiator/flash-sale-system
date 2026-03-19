@@ -1,181 +1,181 @@
-const express = require('express');
-const { v4: uuidv4 } = require('uuid');
-const { query } = require('../config/db');
-const { authenticate } = require('../middleware/auth');
+const express = require("express");
+const { v4: uuidv4 } = require("uuid");
+const { query } = require("../config/db");
+const { authenticate } = require("../middleware/auth");
 const {
   reserveInventory,
   isSaleActive,
   acquireProcessingLock,
   releaseProcessingLock,
-} = require('../services/inventoryService');
-const { createOrder, getOrderByIdempotencyKey } = require('../services/orderService');
-
+} = require("../services/inventoryService");
+const {
+  createOrder,
+  getOrderByIdempotencyKey,
+} = require("../services/orderService");
+const {
+  userRateLimiter,
+  buyRateLimiter,
+  globalRateLimiter,
+} = require("../middleware/rateLimiter");
 const router = express.Router();
-
 
 //   1. Validate idempotency key (duplicate request check)
 //   2. Verify sale is active
 //   3. Verify product is part of sale
-//   4. Acquire per-user processing lock 
+//   4. Acquire per-user processing lock
 //   5. Atomic inventory decrement in Redis
 //   6. Write order + outbox event in single DB transaction
 //   7. Release processing lock
 
-router.post('/', authenticate, async (req, res, next) => {
-  const { sale_id, sale_product_id, quantity = 1 } = req.body;
-  const userId = req.user.id;
+router.post(
+  "/",
+  globalRateLimiter(1000, 1000), 
+  authenticate, 
+  userRateLimiter(10, 10000), 
+  buyRateLimiter(3, 30000),
+  async (req, res, next) => {
+    const { sale_id, sale_product_id, quantity = 1 } = req.body;
+    const userId = req.user.id;
 
-  const idempotencyKey = req.headers['x-idempotency-key'] || uuidv4();
+    const idempotencyKey = req.headers["x-idempotency-key"] || uuidv4();
 
-  if (!sale_id || !sale_product_id) {
-    return res.status(400).json({
-      success: false,
-      error: 'sale_id and sale_product_id are required.',
-    });
-  }
-
-  if (quantity < 1 || quantity > 5) {
-    return res.status(400).json({
-      success: false,
-      error: 'quantity must be between 1 and 5.',
-    });
-  }
-
-
-  const existingOrder = await getOrderByIdempotencyKey(idempotencyKey);
-  if (existingOrder) {
-    return res.status(200).json({
-      success: true,
-      message: 'Order already placed.',
-      data: { order: existingOrder },
-    });
-  }
-
-  
-  const saleActive = await isSaleActive(sale_id);
-  if (!saleActive) {
-
-    const { rows } = await query(
-      `SELECT status FROM sales WHERE id = $1`,
-      [sale_id]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Sale not found.',
-      });
-    }
-
-    if (rows[0].status !== 'ACTIVE') {
+    if (!sale_id || !sale_product_id) {
       return res.status(400).json({
         success: false,
-        error: `Sale is not active. Current status: ${rows[0].status}.`,
+        error: "sale_id and sale_product_id are required.",
       });
     }
-  }
 
+    if (quantity < 1 || quantity > 5) {
+      return res.status(400).json({
+        success: false,
+        error: "quantity must be between 1 and 5.",
+      });
+    }
 
-  const { rows: spRows } = await query(
-    `SELECT sp.id, sp.sale_price, sp.total_qty, sp.reserved_qty,
+    const existingOrder = await getOrderByIdempotencyKey(idempotencyKey);
+    if (existingOrder) {
+      return res.status(200).json({
+        success: true,
+        message: "Order already placed.",
+        data: { order: existingOrder },
+      });
+    }
+
+    const saleActive = await isSaleActive(sale_id);
+    if (!saleActive) {
+      const { rows } = await query(`SELECT status FROM sales WHERE id = $1`, [
+        sale_id,
+      ]);
+
+      if (rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Sale not found.",
+        });
+      }
+
+      if (rows[0].status !== "ACTIVE") {
+        return res.status(400).json({
+          success: false,
+          error: `Sale is not active. Current status: ${rows[0].status}.`,
+        });
+      }
+    }
+
+    const { rows: spRows } = await query(
+      `SELECT sp.id, sp.sale_price, sp.total_qty, sp.reserved_qty,
             p.id AS product_id, p.name AS product_name
      FROM sale_products sp
      JOIN products p ON p.id = sp.product_id
      WHERE sp.id = $1 AND sp.sale_id = $2`,
-    [sale_product_id, sale_id]
-  );
+      [sale_product_id, sale_id]
+    );
 
-  if (spRows.length === 0) {
-    return res.status(404).json({
-      success: false,
-      error: 'Product not found in this sale.',
-    });
-  }
+    if (spRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Product not found in this sale.",
+      });
+    }
 
-  const saleProduct = spRows[0];
+    const saleProduct = spRows[0];
 
- 
-  const { rows: existingOrderRows } = await query(
-    `SELECT o.id FROM orders o
+    const { rows: existingOrderRows } = await query(
+      `SELECT o.id FROM orders o
      JOIN order_items oi ON oi.order_id = o.id
      WHERE o.user_id = $1
        AND o.sale_id = $2
        AND oi.product_id = $3
        AND o.status IN ('PENDING', 'CONFIRMED')`,
-    [userId, sale_id, saleProduct.product_id]
-  );
+      [userId, sale_id, saleProduct.product_id]
+    );
 
-  if (existingOrderRows.length > 0) {
-    return res.status(409).json({
-      success: false,
-      error: 'You have already purchased this product in this sale.',
-    });
-  }
-
-  
-  const lockAcquired = await acquireProcessingLock(sale_id, userId);
-  if (!lockAcquired) {
-    return res.status(429).json({
-      success: false,
-      error: 'Your previous request is still being processed. Please wait.',
-    });
-  }
-
-  try {
-  
-    const inventory = await reserveInventory(sale_product_id);
-
-    if (!inventory.success) {
-      if (inventory.reason === 'OUT_OF_STOCK') {
-        return res.status(409).json({
-          success: false,
-          error: 'Sorry, this item is sold out.',
-        });
-      }
-      if (inventory.reason === 'SALE_NOT_FOUND') {
-        return res.status(400).json({
-          success: false,
-          error: 'Sale has ended.',
-        });
-      }
+    if (existingOrderRows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: "You have already purchased this product in this sale.",
+      });
     }
 
-   
-    const { order } = await createOrder({
-      userId,
-      saleId: sale_id,
-      saleProductId: sale_product_id,
-      product: saleProduct,
-      quantity,
-      unitPrice: parseFloat(saleProduct.sale_price),
-      idempotencyKey,
-    });
+    const lockAcquired = await acquireProcessingLock(sale_id, userId);
+    if (!lockAcquired) {
+      return res.status(429).json({
+        success: false,
+        error: "Your previous request is still being processed. Please wait.",
+      });
+    }
 
+    try {
+      const inventory = await reserveInventory(sale_product_id);
 
+      if (!inventory.success) {
+        if (inventory.reason === "OUT_OF_STOCK") {
+          return res.status(409).json({
+            success: false,
+            error: "Sorry, this item is sold out.",
+          });
+        }
+        if (inventory.reason === "SALE_NOT_FOUND") {
+          return res.status(400).json({
+            success: false,
+            error: "Sale has ended.",
+          });
+        }
+      }
 
-    res.status(201).json({
-      success: true,
-      message: 'Order placed successfully. Payment is being processed.',
-      data: {
-        order: {
-          id: order.id,
-          status: order.status,
-          total_amount: order.total_amount,
-          created_at: order.created_at,
-          items_remaining: inventory.remaining,
+      const { order } = await createOrder({
+        userId,
+        saleId: sale_id,
+        saleProductId: sale_product_id,
+        product: saleProduct,
+        quantity,
+        unitPrice: parseFloat(saleProduct.sale_price),
+        idempotencyKey,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Order placed successfully. Payment is being processed.",
+        data: {
+          order: {
+            id: order.id,
+            status: order.status,
+            total_amount: order.total_amount,
+            created_at: order.created_at,
+            items_remaining: inventory.remaining,
+          },
         },
-      },
-    });
-
-  } finally {
-    await releaseProcessingLock(sale_id, userId);
+      });
+    } finally {
+      await releaseProcessingLock(sale_id, userId);
+    }
   }
-});
-
+);
 
 // Protected — returns the logged-in user's order history
 
-router.get('/', authenticate, async (req, res, next) => {
+router.get("/", authenticate,userRateLimiter(30, 10000), async (req, res, next) => {
   try {
     const userId = req.user.id;
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -225,10 +225,9 @@ router.get('/', authenticate, async (req, res, next) => {
   }
 });
 
-
 // Protected — returns a single order (must belong to the requesting user)
 
-router.get('/:id', authenticate, async (req, res, next) => {
+router.get("/:id", authenticate,userRateLimiter(30, 10000), async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
@@ -256,7 +255,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
     if (rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Order not found.',
+        error: "Order not found.",
       });
     }
 
