@@ -7,9 +7,10 @@ const { pool } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const saleScheduler = require('./services/saleScheduler');
 const outboxPoller = require('./services/outboxPoller');
-const { startPaymentConsumer } = require('./services/paymentService');       // ← add
-const { startNotificationConsumer } = require('./services/notificationService'); // ← add
-
+const { startPaymentConsumer } = require('./services/paymentService');
+const { startNotificationConsumer } = require('./services/notificationService');
+const reconciliationJob = require('./services/reconciliationJob');  
+const { authenticate } = require('./middleware/auth');
 const app = express();
 
 app.use(express.json());
@@ -33,7 +34,19 @@ app.use('/api/auth',     require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/sales',    require('./routes/saleRoutes'));
 app.use('/api/orders',   require('./routes/orderRoutes'));
-
+app.post('/internal/reconcile', authenticate, async (req, res) => {
+  try {
+    console.log(`[Reconciliation] Manual trigger by user: ${req.user.id}`);
+    // Run in background — don't make the HTTP request wait
+    reconciliationJob.tick();
+    res.json({
+      success: true,
+      message: 'Reconciliation run triggered. Check server logs.',
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 app.use((req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
 });
@@ -51,8 +64,8 @@ const start = async () => {
 
     saleScheduler.start();
     outboxPoller.start();
+    reconciliationJob.start();  
 
-    
     await startPaymentConsumer();
     await startNotificationConsumer();
 
