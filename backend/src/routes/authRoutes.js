@@ -1,12 +1,10 @@
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { query } = require('../config/db');
-const { authenticate } = require('../middleware/auth');
-const { authRateLimiter } = require('../middleware/rateLimiter');
+const express = require("express");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { query } = require("../config/db");
+const { authenticate } = require("../middleware/auth");
+const { authRateLimiter } = require("../middleware/rateLimiter");
 const router = express.Router();
-
-
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -14,54 +12,48 @@ const generateToken = (user) => {
       id: user.id,
       email: user.email,
       full_name: user.full_name,
+      role: user.role,
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN }
   );
 };
 
-
-
-router.post('/register',authRateLimiter(), async (req, res, next) => {
+router.post("/register", authRateLimiter(), async (req, res, next) => {
   try {
     const { email, password, full_name } = req.body;
 
-   
     if (!email || !password || !full_name) {
       return res.status(400).json({
         success: false,
-        error: 'email, password and full_name are required.',
+        error: "email, password and full_name are required.",
       });
     }
 
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
-        error: 'Password must be at least 6 characters.',
+        error: "Password must be at least 6 characters.",
       });
     }
 
-  
-    const existing = await query(
-      'SELECT id FROM users WHERE email = $1',
-      [email.toLowerCase().trim()]
-    );
+    const existing = await query("SELECT id FROM users WHERE email = $1", [
+      email.toLowerCase().trim(),
+    ]);
 
     if (existing.rows.length > 0) {
       return res.status(409).json({
         success: false,
-        error: 'An account with this email already exists.',
+        error: "An account with this email already exists.",
       });
     }
 
-  
     const password_hash = await bcrypt.hash(password, 12);
 
-   
     const result = await query(
       `INSERT INTO users (email, password_hash, full_name)
-       VALUES ($1, $2, $3)
-       RETURNING id, email, full_name, created_at`,
+ VALUES ($1, $2, $3)
+ RETURNING id, email, full_name, role, created_at`,
       [email.toLowerCase().trim(), password_hash, full_name.trim()]
     );
 
@@ -70,7 +62,7 @@ router.post('/register',authRateLimiter(), async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Account created successfully.',
+      message: "Account created successfully.",
       data: {
         user: {
           id: user.id,
@@ -86,40 +78,36 @@ router.post('/register',authRateLimiter(), async (req, res, next) => {
   }
 });
 
-
-
-router.post('/login',authRateLimiter(), async (req, res, next) => {
+router.post("/login", authRateLimiter(), async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'email and password are required.',
+        error: "email and password are required.",
       });
     }
 
-   
     const result = await query(
-      `SELECT id, email, full_name, password_hash, is_active, created_at
-       FROM users WHERE email = $1`,
+      `SELECT id, email, full_name, password_hash, role, is_active, created_at
+ FROM users WHERE email = $1`,
       [email.toLowerCase().trim()]
     );
 
     const user = result.rows[0];
 
-    
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password.',
+        error: "Invalid email or password.",
       });
     }
 
     if (!user.is_active) {
       return res.status(403).json({
         success: false,
-        error: 'Account is deactivated. Please contact support.',
+        error: "Account is deactivated. Please contact support.",
       });
     }
 
@@ -128,7 +116,7 @@ router.post('/login',authRateLimiter(), async (req, res, next) => {
     if (!passwordMatch) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password.',
+        error: "Invalid email or password.",
       });
     }
 
@@ -136,7 +124,7 @@ router.post('/login',authRateLimiter(), async (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'Login successful.',
+      message: "Login successful.",
       data: {
         user: {
           id: user.id,
@@ -152,8 +140,7 @@ router.post('/login',authRateLimiter(), async (req, res, next) => {
   }
 });
 
-
-router.get('/me', authenticate, async (req, res, next) => {
+router.get("/me", authenticate, async (req, res, next) => {
   try {
     const result = await query(
       `SELECT id, email, full_name, is_active, created_at
@@ -166,7 +153,7 @@ router.get('/me', authenticate, async (req, res, next) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: 'User not found.',
+        error: "User not found.",
       });
     }
 
