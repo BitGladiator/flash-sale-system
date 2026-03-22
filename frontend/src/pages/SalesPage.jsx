@@ -6,7 +6,6 @@ import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
 import { Zap, Clock, Package } from 'lucide-react';
 
-// Countdown display for a single sale card
 const SaleCountdown = ({ sale }) => {
   const isUpcoming = sale.status === 'SCHEDULED';
   const targetDate = isUpcoming ? sale.start_time : sale.end_time;
