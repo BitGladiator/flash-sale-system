@@ -44,6 +44,7 @@ app.use('/api/auth',     require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/sales',    require('./routes/saleRoutes'));
 app.use('/api/orders',   require('./routes/orderRoutes'));
+app.use('/api/admin',    require('./routes/adminRoutes'));
 app.post('/internal/reconcile', authenticate, async (req, res) => {
   try {
     console.log(`[Reconciliation] Manual trigger by user: ${req.user.id}`);
