@@ -11,7 +11,3 @@ export const getAdminUsers = (params) =>
 
 export const getSaleMonitor = (saleId) =>
   client.get(`/admin/sales/${saleId}/monitor`);
-
-// Reuse existing APIs for create/update
-export { getSales, getSale } from './sales';
-export { uploadProduct, updateProduct, deleteProduct } from './products';
