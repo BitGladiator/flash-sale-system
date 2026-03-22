@@ -143,8 +143,8 @@ router.post("/login", authRateLimiter(), async (req, res, next) => {
 router.get("/me", authenticate, async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, email, full_name, is_active, created_at
-       FROM users WHERE id = $1`,
+      `SELECT id, email, full_name, role, is_active, created_at
+ FROM users WHERE id = $1`,
       [req.user.id]
     );
 
