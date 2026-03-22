@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');  
 const { connect: connectRedis } = require('./config/redis');
 const { connect: connectRabbitMQ } = require('./config/rabbitmq');
 const { initialize: initMinio } = require('./config/minio');
@@ -12,7 +13,16 @@ const { startNotificationConsumer } = require('./services/notificationService');
 const reconciliationJob = require('./services/reconciliationJob');  
 const { authenticate } = require('./middleware/auth');
 const app = express();
-
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Idempotency-Key',
+  ],
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
