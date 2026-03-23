@@ -127,7 +127,7 @@ router.post(
     }
 
     try {
-      const inventory = await reserveInventory(sale_product_id);
+      const inventory = await reserveInventory(sale_product_id, sale_id);
 
       if (!inventory.success) {
         if (inventory.reason === "OUT_OF_STOCK") {

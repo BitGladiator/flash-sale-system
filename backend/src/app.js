@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');  
+const http = require('http');                                    // ← add
+const cors = require('cors');
 const { connect: connectRedis } = require('./config/redis');
 const { connect: connectRabbitMQ } = require('./config/rabbitmq');
 const { initialize: initMinio } = require('./config/minio');
@@ -10,19 +11,19 @@ const saleScheduler = require('./services/saleScheduler');
 const outboxPoller = require('./services/outboxPoller');
 const { startPaymentConsumer } = require('./services/paymentService');
 const { startNotificationConsumer } = require('./services/notificationService');
-const reconciliationJob = require('./services/reconciliationJob');  
-const { authenticate } = require('./middleware/auth');
+const reconciliationJob = require('./services/reconciliationJob');
+const socketConfig = require('./config/socket');                
+
 const app = express();
+const httpServer = http.createServer(app);                 
+
 app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Idempotency-Key',
-  ],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key'],
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -45,19 +46,14 @@ app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/sales',    require('./routes/saleRoutes'));
 app.use('/api/orders',   require('./routes/orderRoutes'));
 app.use('/api/admin',    require('./routes/adminRoutes'));
-app.post('/internal/reconcile', authenticate, async (req, res) => {
-  try {
-    console.log(`[Reconciliation] Manual trigger by user: ${req.user.id}`);
-    // Run in background — don't make the HTTP request wait
+
+app.post('/internal/reconcile', require('./middleware/auth').authenticate,
+  async (req, res) => {
     reconciliationJob.tick();
-    res.json({
-      success: true,
-      message: 'Reconciliation run triggered. Check server logs.',
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.json({ success: true, message: 'Reconciliation triggered.' });
   }
-});
+);
+
 app.use((req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
 });
@@ -73,18 +69,22 @@ const start = async () => {
     await connectRabbitMQ();
     await initMinio();
 
+  
+    socketConfig.initialize(httpServer);
+
     saleScheduler.start();
     outboxPoller.start();
-    reconciliationJob.start();  
+    reconciliationJob.start();
 
     await startPaymentConsumer();
     await startNotificationConsumer();
 
-    app.listen(process.env.PORT, () => {
+    
+    httpServer.listen(process.env.PORT, () => {
       console.log(`Server running on http://localhost:${process.env.PORT}`);
     });
   } catch (err) {
-    console.error('Failed to start server:', err.message);
+    console.error('✗ Failed to start server:', err.message);
     process.exit(1);
   }
 };

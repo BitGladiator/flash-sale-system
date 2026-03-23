@@ -20,6 +20,7 @@
     "multer": "^2.1.1",
     "pg": "^8.11.3",
     "redis": "^4.6.10",
+    "socket.io": "^4.8.3",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

@@ -114,7 +114,7 @@ const handlePaymentFailure = async (orderData, failureReason) => {
     await client.query('COMMIT');
 
     
-    await releaseInventory(orderData.saleProductId);
+    await releaseInventory(orderData.saleProductId, orderData.saleId);
 
     console.log(`[Payment] ✗ Order ${orderData.orderId} FAILED — inventory restored`);
 

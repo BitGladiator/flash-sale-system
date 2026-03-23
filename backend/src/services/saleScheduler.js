@@ -1,6 +1,6 @@
 const { query } = require('../config/db');
 const { client: redis } = require('../config/redis');
-
+const { emitSaleStatusUpdate } = require('../config/socket');
 
 
 const inventoryKey = (saleProductId) => `inventory:${saleProductId}`;
@@ -55,7 +55,7 @@ const activateSale = async (sale) => {
     `UPDATE sales SET status = 'ACTIVE' WHERE id = $1`,
     [sale.id]
   );
-
+  emitSaleStatusUpdate(sale.id, 'ACTIVE');
   console.log(`[Scheduler] Sale ${sale.name} is now ACTIVE — inventory live in Redis`);
 };
 
@@ -110,6 +110,7 @@ const endSale = async (sale) => {
     `UPDATE sales SET status = 'ENDED' WHERE id = $1`,
     [sale.id]
   );
+  emitSaleStatusUpdate(sale.id, 'ENDED');
 
   console.log(`[Scheduler] Sale ${sale.name} has ENDED — Redis cleaned up, DB synced`);
 };
