@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import useCountdown from '../hooks/useCountdown';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
+import socket from '../api/socket';
 import toast from 'react-hot-toast';
 import {
   Zap, Clock, Package, ShoppingCart,
@@ -37,7 +38,7 @@ const CountdownBanner = ({ endTime }) => {
       </div>
       <div className="flex items-center gap-1.5 font-mono">
         {[
-          { value: pad(hours), label: 'HRS' },
+          { value: pad(hours),   label: 'HRS' },
           { value: pad(minutes), label: 'MIN' },
           { value: pad(seconds), label: 'SEC' },
         ].map(({ value, label }, i) => (
@@ -112,16 +113,14 @@ const ProductCard = ({ product, saleId, saleStatus, onOrderPlaced }) => {
         sale_product_id: product.sale_product_id,
         quantity: 1,
       });
-
       setOrdered(true);
       toast.success('Order placed! Payment is being processed.', {
-        duration: 5000
+        duration: 5000,
       });
       onOrderPlaced();
     } catch (err) {
       const msg = err.response?.data?.error || 'Failed to place order.';
       if (err.response?.status === 409) {
-    
         setOrdered(true);
         toast(msg);
       } else if (err.response?.status === 429) {
@@ -160,9 +159,10 @@ const ProductCard = ({ product, saleId, saleStatus, onOrderPlaced }) => {
           {product.description}
         </p>
       )}
+
       <div className="mb-4">
         <span className="text-3xl font-black text-white">
-          ${Number(product.sale_price).toLocaleString('en-IN')}
+          ₹{Number(product.sale_price).toLocaleString('en-IN')}
         </span>
       </div>
 
@@ -177,32 +177,22 @@ const ProductCard = ({ product, saleId, saleStatus, onOrderPlaced }) => {
           onClick={handleBuy}
           disabled={buying || isSoldOut || ordered}
           className={`w-full flex items-center justify-center gap-2
-                      font-bold py-3.5 rounded-xl transition-all
-                      duration-150 active:scale-95
+                      font-bold py-3.5 rounded-xl transition-all duration-150
+                      active:scale-95
                       ${ordered
                         ? 'bg-green-900/50 text-green-400 border border-green-800 cursor-default'
                         : isSoldOut
                         ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                        : 'bg-brand-600 hover:bg-brand-700 text-white'}`}
+                        : 'bg-pink-600 hover:bg-pink-700 text-white'}`}
         >
           {buying ? (
-            <>
-              <Spinner size="sm" />
-              Processing...
-            </>
+            <><Spinner size="sm" /> Processing...</>
           ) : ordered ? (
-            <>
-              <CheckCircle className="h-5 w-5" />
-              Order Placed
-            </>
+            <><CheckCircle className="h-5 w-5" /> Order Placed</>
           ) : isSoldOut ? (
-            <>
-              <AlertTriangle className="h-5 w-5" />
-              Sold Out
-            </>
+            <><AlertTriangle className="h-5 w-5" /> Sold Out</>
           ) : (
-            <>
-              <ShoppingCart className="h-5 w-5" />
+            <><ShoppingCart className="h-5 w-5" />
               Buy Now — ₹{Number(product.sale_price).toLocaleString('en-IN')}
             </>
           )}
@@ -214,7 +204,6 @@ const ProductCard = ({ product, saleId, saleStatus, onOrderPlaced }) => {
           Sale hasn't started yet
         </div>
       )}
-
       {saleStatus === 'ENDED' && (
         <div className="text-center py-3 text-gray-500 text-sm">
           This sale has ended
@@ -245,9 +234,46 @@ const SaleDetailPage = () => {
 
   useEffect(() => {
     fetchSale();
-    const interval = setInterval(fetchSale, 30000);
-    return () => clearInterval(interval);
-  }, [fetchSale]);
+
+    socket.emit('join:sale', id);
+
+    const handleInventoryUpdate = ({ saleProductId, availableQty }) => {
+      setSale((prev) => {
+        if (!prev || !prev.products) return prev;
+        return {
+          ...prev,
+          products: prev.products.map((p) =>
+            p.sale_product_id === saleProductId
+              ? { ...p, available_qty: availableQty }
+              : p
+          ),
+        };
+      });
+    };
+
+ 
+    const handleSaleStatus = ({ status }) => {
+      setSale((prev) => prev ? { ...prev, status } : prev);
+
+      if (status === 'ACTIVE') {
+        toast.success('Sale is now live!', { icon: '⚡' });
+      
+        fetchSale();
+      }
+      if (status === 'ENDED') {
+        toast('This sale has ended.');
+      }
+    };
+
+    socket.on('inventory:update', handleInventoryUpdate);
+    socket.on('sale:status', handleSaleStatus);
+
+    return () => {
+      socket.emit('leave:sale', id);
+      socket.off('inventory:update', handleInventoryUpdate);
+      socket.off('sale:status', handleSaleStatus);
+    };
+  }, [id, fetchSale]);
 
   if (loading) {
     return (
@@ -266,9 +292,11 @@ const SaleDetailPage = () => {
         className="flex items-center gap-2 text-gray-400 hover:text-white
                    transition-colors mb-6 group"
       >
-        <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+        <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5
+                               transition-transform" />
         All Sales
       </button>
+
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2 flex-wrap">
           <h1 className="text-3xl font-bold text-white">{sale.name}</h1>
@@ -293,7 +321,7 @@ const SaleDetailPage = () => {
                         rounded-2xl p-4 mb-6 flex items-center gap-3">
           <Clock className="h-5 w-5 text-yellow-400 shrink-0" />
           <div>
-            <p className="text-yellow-300 font-semibold text-sm">
+            <p className="text-yellow-300 font-semibold text-sm mb-2">
               Sale starts in
             </p>
             <CountdownBanner endTime={sale.start_time} />

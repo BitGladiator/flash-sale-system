@@ -16,7 +16,7 @@ const sendOrderConfirmation = async (data) => {
 };
 
 const sendPaymentFailureNotification = async (data) => {
-  console.log(`[Notification] ✗ Payment failure notification sent`);
+  console.log(`[Notification] Payment failure notification sent`);
   console.log(`  → Order ID:   ${data.orderId}`);
   console.log(`  → Product:    ${data.productName}`);
   console.log(`  → Reason:     ${data.reason}`);

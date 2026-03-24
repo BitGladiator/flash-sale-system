@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const http = require('http');                                    // ← add
+const http = require('http');                                  
 const cors = require('cors');
 const { connect: connectRedis } = require('./config/redis');
 const { connect: connectRabbitMQ } = require('./config/rabbitmq');
