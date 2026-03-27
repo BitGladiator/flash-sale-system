@@ -5,6 +5,7 @@ import useCountdown from '../hooks/useCountdown';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
 import { Zap, Clock, Package } from 'lucide-react';
+import socket from '../api/socket';
 
 const SaleCountdown = ({ sale }) => {
   const isUpcoming = sale.status === 'SCHEDULED';
@@ -141,6 +142,15 @@ const SalesPage = () => {
       }
     };
     fetchSales();
+
+    const handleSaleStatus = ({ saleId, status }) => {
+      setSales((prev) => 
+        prev.map((s) => String(s.id) === String(saleId) ? { ...s, status } : s)
+      );
+    };
+
+    socket.on('sale:status', handleSaleStatus);
+    return () => socket.off('sale:status', handleSaleStatus);
   }, [filter]);
 
   const filters = ['ALL', 'ACTIVE', 'SCHEDULED', 'ENDED'];

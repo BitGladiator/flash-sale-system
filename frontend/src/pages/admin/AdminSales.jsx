@@ -10,7 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
 import toast from 'react-hot-toast';
 import { Plus, X, Activity, StopCircle } from 'lucide-react';
-
+import socket from '../../api/socket';
 
 const CreateSaleModal = ({ onSuccess, onClose }) => {
   const [form, setForm] = useState({ name: '', start_time: '', end_time: '' });
@@ -198,7 +198,18 @@ const AdminSales = () => {
     }
   };
 
-  useEffect(() => { fetchSales(); }, []);
+  useEffect(() => { 
+    fetchSales(); 
+
+    const handleSaleStatus = ({ saleId, status }) => {
+      setSales((prev) => 
+        prev.map((s) => String(s.id) === String(saleId) ? { ...s, status } : s)
+      );
+    };
+
+    socket.on('sale:status', handleSaleStatus);
+    return () => socket.off('sale:status', handleSaleStatus);
+  }, []);
 
   const handleStop = async (saleId) => {
     if (!window.confirm('Force stop this active sale?')) return;

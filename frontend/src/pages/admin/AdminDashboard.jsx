@@ -7,6 +7,7 @@ import {
   Users, ShoppingBag, Zap,
   TrendingUp, CheckCircle, Clock, XCircle,
 } from 'lucide-react';
+import socket from '../../api/socket';
 
 const StatCard = ({ label, value, icon: Icon, color, sub }) => (
   <div className="card p-6">
@@ -26,10 +27,17 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getStats()
-      .then((res) => setStats(res.data.data.stats))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const fetchStats = () => {
+      getStats()
+        .then((res) => setStats(res.data.data.stats))
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    };
+
+    fetchStats();
+
+    socket.on('sale:status', fetchStats);
+    return () => socket.off('sale:status', fetchStats);
   }, []);
 
   if (loading) {

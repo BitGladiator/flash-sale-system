@@ -45,7 +45,7 @@ const emitInventoryUpdate = (saleId, saleProductId, availableQty) => {
 
 const emitSaleStatusUpdate = (saleId, status) => {
   if (!io) return;
-  io.to(`sale:${saleId}`).emit('sale:status', { saleId, status });
+  io.emit('sale:status', { saleId, status });
 };
 
 const getIO = () => io;

@@ -14,26 +14,51 @@ import {
 } from 'lucide-react';
 
 
-const CountdownBanner = ({ endTime }) => {
+const CountdownBanner = ({ endTime, isUpcoming = false }) => {
   const { hours, minutes, seconds, expired } = useCountdown(endTime);
   const pad = (n) => String(n).padStart(2, '0');
 
   if (expired) return null;
 
-  const isUrgent = hours === 0 && minutes < 10;
+  const isUrgent = !isUpcoming && hours === 0 && minutes < 10;
+  
+  let theme = {
+    bg: 'bg-green-900/20 border border-green-800/50',
+    text: 'text-green-300',
+    icon: 'text-green-400',
+    numBg: 'bg-green-900/40 text-green-300',
+    colon: 'text-green-700',
+    label: 'Sale ends in'
+  };
+
+  if (isUpcoming) {
+    theme = {
+      bg: 'bg-yellow-900/20 border border-yellow-800/50',
+      text: 'text-yellow-300',
+      icon: 'text-yellow-400',
+      numBg: 'bg-yellow-900/40 text-yellow-300',
+      colon: 'text-yellow-700',
+      label: 'Sale starts in'
+    };
+  } else if (isUrgent) {
+    theme = {
+      bg: 'bg-red-900/30 border border-red-800',
+      text: 'text-red-300',
+      icon: 'text-red-400',
+      numBg: 'bg-red-900/50 text-red-300',
+      colon: 'text-red-600',
+      label: 'Ending very soon!'
+    };
+  }
 
   return (
     <div className={`rounded-2xl p-4 mb-6 flex items-center
                      justify-between flex-wrap gap-3
-                     ${isUrgent
-                       ? 'bg-red-900/30 border border-red-800'
-                       : 'bg-green-900/20 border border-green-800/50'}`}>
+                     ${theme.bg}`}>
       <div className="flex items-center gap-2">
-        <Clock className={`h-5 w-5
-          ${isUrgent ? 'text-red-400' : 'text-green-400'}`} />
-        <span className={`font-semibold text-sm
-          ${isUrgent ? 'text-red-300' : 'text-green-300'}`}>
-          {isUrgent ? 'Ending very soon!' : 'Sale ends in'}
+        <Clock className={`h-5 w-5 ${theme.icon}`} />
+        <span className={`font-semibold text-sm ${theme.text}`}>
+          {theme.label}
         </span>
       </div>
       <div className="flex items-center gap-1.5 font-mono">
@@ -44,15 +69,12 @@ const CountdownBanner = ({ endTime }) => {
         ].map(({ value, label }, i) => (
           <div key={label} className="flex items-center gap-1.5">
             {i > 0 && (
-              <span className={isUrgent ? 'text-red-600' : 'text-green-700'}>
+              <span className={theme.colon}>
                 :
               </span>
             )}
             <div className="text-center">
-              <div className={`text-2xl font-black px-3 py-1.5 rounded-xl
-                ${isUrgent
-                  ? 'bg-red-900/50 text-red-300'
-                  : 'bg-green-900/40 text-green-300'}`}>
+              <div className={`text-2xl font-black px-3 py-1.5 rounded-xl ${theme.numBg}`}>
                 {value}
               </div>
               <div className="text-xs text-gray-500 mt-0.5">{label}</div>
@@ -252,7 +274,8 @@ const SaleDetailPage = () => {
     };
 
  
-    const handleSaleStatus = ({ status }) => {
+    const handleSaleStatus = ({ saleId: updatedSaleId, status }) => {
+      if (String(updatedSaleId) !== String(id)) return;
       setSale((prev) => prev ? { ...prev, status } : prev);
 
       if (status === 'ACTIVE') {
@@ -317,16 +340,7 @@ const SaleDetailPage = () => {
         <CountdownBanner endTime={sale.end_time} />
       )}
       {sale.status === 'SCHEDULED' && (
-        <div className="bg-yellow-900/20 border border-yellow-800/50
-                        rounded-2xl p-4 mb-6 flex items-center gap-3">
-          <Clock className="h-5 w-5 text-yellow-400 shrink-0" />
-          <div>
-            <p className="text-yellow-300 font-semibold text-sm mb-2">
-              Sale starts in
-            </p>
-            <CountdownBanner endTime={sale.start_time} />
-          </div>
-        </div>
+        <CountdownBanner endTime={sale.start_time} isUpcoming={true} />
       )}
 
       {!sale.products || sale.products.length === 0 ? (
