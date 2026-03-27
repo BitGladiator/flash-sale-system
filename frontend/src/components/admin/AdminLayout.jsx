@@ -23,7 +23,7 @@ const AdminLayout = ({ children }) => {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <aside className="w-64 bg-gray-900 border-r border-gray-800
                         flex flex-col shrink-0">
         <div className="p-6 border-b border-gray-800">
