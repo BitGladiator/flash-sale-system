@@ -29,7 +29,6 @@ const AdminSaleMonitor = () => {
 
   useEffect(() => {
     fetch();
-    // Auto-refresh every 10 seconds
     const interval = setInterval(fetch, 10000);
     return () => clearInterval(interval);
   }, [fetch]);
