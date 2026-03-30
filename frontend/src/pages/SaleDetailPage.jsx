@@ -239,20 +239,29 @@ const ProductCard = ({ product, saleId, saleStatus, onOrderPlaced }) => {
 const SaleDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [sale, setSale] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchSale = useCallback(async () => {
     try {
       const res = await getSale(id);
-      setSale(res.data.data.sale);
+      const fetchedSale = res.data.data.sale;
+      
+      if (fetchedSale.status === 'ENDED' && user?.role !== 'ADMIN') {
+        toast.error('This sale has ended.');
+        navigate('/');
+        return;
+      }
+      
+      setSale(fetchedSale);
     } catch (err) {
       toast.error('Sale not found.');
       navigate('/');
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user?.role, navigate]);
 
   useEffect(() => {
     fetchSale();

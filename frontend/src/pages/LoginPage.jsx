@@ -22,7 +22,11 @@ const LoginPage = () => {
       const { token, user } = res.data.data;
       login(token, user);
       toast.success(`Welcome back, ${user.full_name.split(' ')[0]}!`);
-      navigate('/');
+      if (user.role === 'ADMIN') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Login failed.');
     } finally {

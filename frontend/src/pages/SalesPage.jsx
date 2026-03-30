@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSales } from '../api/sales';
+import { useAuth } from '../context/AuthContext';
 import useCountdown from '../hooks/useCountdown';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
@@ -125,16 +126,21 @@ const SaleCard = ({ sale }) => {
 
 
 const SalesPage = () => {
+  const { user } = useAuth();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('ALL');
+  const [filter, setFilter] = useState(() => user?.role === 'ADMIN' ? 'ALL' : 'ACTIVE');
 
   useEffect(() => {
     const fetchSales = async () => {
       try {
         const params = filter !== 'ALL' ? { status: filter } : {};
         const res = await getSales(params);
-        setSales(res.data.data.sales);
+        let fetchedSales = res.data.data.sales;
+        if (user?.role !== 'ADMIN') {
+          fetchedSales = fetchedSales.filter(s => s.status !== 'ENDED');
+        }
+        setSales(fetchedSales);
       } catch (err) {
         console.error(err);
       } finally {
@@ -151,9 +157,11 @@ const SalesPage = () => {
 
     socket.on('sale:status', handleSaleStatus);
     return () => socket.off('sale:status', handleSaleStatus);
-  }, [filter]);
+  }, [filter, user?.role]);
 
-  const filters = ['ALL', 'ACTIVE', 'SCHEDULED', 'ENDED'];
+  const filters = user?.role === 'ADMIN' 
+    ? ['ALL', 'ACTIVE', 'SCHEDULED', 'ENDED'] 
+    : ['ACTIVE', 'SCHEDULED'];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
