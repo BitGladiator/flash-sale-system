@@ -31,44 +31,7 @@ The project is split into a backend (Node.js + Express) and a frontend (React + 
 ---
 
 ## Architecture
-
-```
-Client (React)
-      |
-      | HTTP + WebSocket
-      |
-API Gateway Layer
-      |
-      |--- Rate Limiter (Redis sliding window)
-      |--- JWT Authentication
-      |
-      |
-      +-------+----------+-----------+
-      |       |          |           |
-   Auth    Products    Sales      Orders
-   Route    Route      Route      Route
-                         |           |
-                   Sale Scheduler  Inventory Service
-                         |           |
-                         |        Redis (atomic DECR via Lua)
-                         |           |
-                    Postgres      Outbox Table
-                                     |
-                               Outbox Poller
-                                     |
-                               RabbitMQ
-                                     |
-                          +----------+----------+
-                          |                     |
-                   Payment Consumer    Notification Consumer
-                          |
-                  Payment Gateway (simulated / Razorpay)
-                          |
-                  Compensating Transaction
-                  (restore Redis inventory on failure)
-                          |
-                   Reconciliation Job (every 5 min)
-```
+<img src="/images/Screenshot 2026-05-26 at 11.01.38 PM.jpg" width="700"/>
 
 **Infrastructure:**
 - PostgreSQL — durable storage for users, products, sales, orders
