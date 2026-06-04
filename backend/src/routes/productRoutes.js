@@ -2,14 +2,11 @@ const express = require('express');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { query } = require('../config/db');
-const { uploadFile, getFileUrl, deleteFile } = require('../config/minio');
+const { uploadFile, getFileUrl, deleteFile, client, BUCKET } = require('../config/minio');
 const { authenticate } = require('../middleware/auth');
 const { userRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
-
-// memoryStorage keeps the file in RAM as a Buffer, no temp files on disk
-// We immediately stream it to MinIO and discard the buffer
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -27,15 +24,14 @@ const upload = multer({
 });
 
 
-// Attach image_url to product rows using the MinIO helper
+
 const attachImageUrl = (product) => ({
   ...product,
   image_url: product.image_key ? getFileUrl(product.image_key) : null,
 });
 
 
-// Public - no auth required
-// Returns all active products with pagination
+
 router.get('/', async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -75,7 +71,7 @@ router.get('/', async (req, res, next) => {
 });
 
 
-// Public — no auth required
+
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -103,6 +99,28 @@ router.get('/:id', async (req, res, next) => {
 });
 
 
+router.get('/images/:folder/:filename', async (req, res, next) => {
+  try {
+    const { folder, filename } = req.params;
+    const objectKey = `${folder}/${filename}`;
+
+    const stat = await client.statObject(BUCKET, objectKey);
+
+    res.setHeader('Content-Type', stat.metaData['content-type'] || 'application/octet-stream');
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    const stream = await client.getObject(BUCKET, objectKey);
+    stream.pipe(res);
+  } catch (err) {
+    if (err.code === 'NoSuchKey' || err.code === 'NotFound') {
+      return res.status(404).json({ success: false, error: 'Image not found' });
+    }
+    next(err);
+  }
+});
+
+
 // Protected — requires auth
 // Accepts multipart/form-data with optional image file
 router.post('/', authenticate,userRateLimiter(20, 60000), upload.single('image'), async (req, res, next) => {
@@ -125,10 +143,8 @@ router.post('/', authenticate,userRateLimiter(20, 60000), upload.single('image')
       });
     }
 
-    // Upload image to MinIO if provided
     let image_key = null;
     if (req.file) {
-      // Build a unique object key: products/<uuid>.<ext>
       const ext = req.file.mimetype.split('/')[1];
       const objectKey = `products/${uuidv4()}.${ext}`;
       image_key = await uploadFile(objectKey, req.file.buffer, req.file.mimetype);
@@ -154,14 +170,12 @@ router.post('/', authenticate,userRateLimiter(20, 60000), upload.single('image')
 });
 
 
-// Protected — requires auth
-// Updates product details and optionally replaces the image
+
 router.put('/:id', authenticate,userRateLimiter(20, 60000), upload.single('image'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description, base_price, is_active } = req.body;
 
-    // Check product exists
     const existing = await query(
       `SELECT id, image_key FROM products WHERE id = $1`,
       [id]
@@ -176,7 +190,6 @@ router.put('/:id', authenticate,userRateLimiter(20, 60000), upload.single('image
 
     const currentProduct = existing.rows[0];
 
-    // Validate price if provided
     if (base_price !== undefined) {
       const price = parseFloat(base_price);
       if (isNaN(price) || price <= 0) {
@@ -187,21 +200,20 @@ router.put('/:id', authenticate,userRateLimiter(20, 60000), upload.single('image
       }
     }
 
-    // Handle image replacement
     let image_key = currentProduct.image_key;
     if (req.file) {
-      // Delete old image from MinIO if it exists
+    
       if (currentProduct.image_key) {
         await deleteFile(currentProduct.image_key);
       }
-      // Upload new image
+   
       const ext = req.file.mimetype.split('/')[1];
       const objectKey = `products/${uuidv4()}.${ext}`;
       image_key = await uploadFile(objectKey, req.file.buffer, req.file.mimetype);
     }
 
    
-    // This prevents accidentally overwriting fields with null
+   
     const updates = [];
     const values = [];
     let paramIndex = 1;
@@ -255,9 +267,7 @@ router.put('/:id', authenticate,userRateLimiter(20, 60000), upload.single('image
 });
 
 
-// Protected — requires auth
-// Soft delete — sets is_active = false, does not remove the DB row
-// Hard delete would break order history that references this product
+
 
 router.delete('/:id', authenticate,userRateLimiter(20, 60000), async (req, res, next) => {
   try {

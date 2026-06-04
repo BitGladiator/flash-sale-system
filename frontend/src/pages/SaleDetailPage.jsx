@@ -162,7 +162,7 @@ const ProductCard = ({ product, saleId, saleStatus, onOrderPlaced }) => {
     <div className="card p-6">
       {product.image_key ? (
         <img
-          src={`http://localhost:9000/flash-sale-products/${product.image_key}`}
+          src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/images/${product.image_key}`}
           alt={product.product_name}
           className="w-full h-48 object-cover rounded-xl mb-4 bg-gray-800"
         />

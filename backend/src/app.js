@@ -84,7 +84,7 @@ const start = async () => {
       console.log(`Server running on http://localhost:${process.env.PORT}`);
     });
   } catch (err) {
-    console.error('✗ Failed to start server:', err.message);
+    console.error('Failed to start server:', err.message);
     process.exit(1);
   }
 };

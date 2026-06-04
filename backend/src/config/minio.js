@@ -40,7 +40,8 @@ const uploadFile = async (objectKey, buffer, mimetype) => {
 
 const getFileUrl = (objectKey) => {
   if (!objectKey) return null;
-  return `http://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT}/${BUCKET}/${objectKey}`;
+  const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+  return `${backendUrl}/api/products/images/${objectKey}`;
 };
 
 const deleteFile = async (objectKey) => {
